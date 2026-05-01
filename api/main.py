@@ -8,6 +8,8 @@ from ytmusicapi import YTMusic
 import yt_dlp
 
 app = FastAPI(title="Spoofy API")
+
+# Middleware CORS agar frontend bisa akses API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,23 +20,22 @@ app.add_middleware(
 
 ytmusic = YTMusic()
 
-# --- PERBAIKAN KRITIS UNTUK VERCEL ---
-# Di Vercel, kita hanya boleh menulis di folder /tmp/
+# --- KONFIGURASI PENYIMPANAN VERCEL (READ-ONLY FIX) ---
+# Vercel hanya mengizinkan penulisan di folder /tmp/
 DATA_FILE = Path("/tmp/playlists.json")
 
 def load_data():
     if not DATA_FILE.exists():
-        # Inisialisasi data kosong jika file belum ada di /tmp/
+        # Inisialisasi template data jika file belum ada di /tmp/
         return {"playlists": [], "liked": []}
     try:
         return json.loads(DATA_FILE.read_text())
-    except:
+    except Exception:
         return {"playlists": [], "liked": []}
 
 def save_data(data):
-    # Simpan ke folder /tmp/ yang diizinkan Vercel
+    # Simpan data ke direktori sementara yang diizinkan[cite: 1]
     DATA_FILE.write_text(json.dumps(data, indent=2))
-# --------------------------------------
 
 LRCLIB_BASE = "https://lrclib.net/api"
 
@@ -89,6 +90,7 @@ async def trending():
         })
     return {"results": formatted}
 
+# --- FUNGSI STREAMING YANG DIPERBAIKI (AUDIO FIX) ---
 @app.get("/api/stream/{video_id}")
 async def get_stream(video_id: str):
     ydl_opts = {
@@ -96,17 +98,25 @@ async def get_stream(video_id: str):
         'noplaylist': True,
         'quiet': True,
         'extract_flat': False,
-        'cachedir': '/tmp/yt-dlp-cache' # Pastikan cache juga ke /tmp/
+        'cachedir': '/tmp/yt-dlp-cache', # Cache di /tmp/ agar tidak error read-only[cite: 1]
+        'nocheckcertificate': True,
+        'ignoreerrors': True,
+        'no_warnings': True,
+        'source_address': '0.0.0.0', # Paksa IPv4 untuk menghindari blokir cloud[cite: 1]
     }
     try:
+        url_yt = f"https://www.youtube.com/watch?v={video_id}"
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            url = info.get('url')
-            if url:
-                return {"url": url}
+            info = ydl.extract_info(url_yt, download=False)
+            if info:
+                # Mengambil URL stream langsung dari info atau daftar formats[cite: 1]
+                url = info.get('url') or (info.get('formats', [{}])[0].get('url'))
+                if url:
+                    return {"url": url}
     except Exception as e:
-        print(f"Error streaming: {e}")
-    raise HTTPException(404, "Stream not found")
+        print(f"Streaming Error: {e}")
+    
+    raise HTTPException(status_code=404, detail="Audio stream not found for this track.")
 
 @app.get("/api/lyrics")
 async def get_lyrics(artist: str, track: str, album: str = ""):
@@ -122,7 +132,7 @@ async def get_lyrics(artist: str, track: str, album: str = ""):
             raise HTTPException(404, "Lyrics not found")
         return r.json()
 
-# --- Playlists & Liked (Menggunakan fungsi load/save baru) ---
+# --- PLAYLISTS & LIKED ---
 @app.get("/api/playlists")
 def list_playlists():
     return load_data()["playlists"]
@@ -150,5 +160,5 @@ async def like_song(req: Request):
         save_data(data)
     return data["liked"]
 
-# Tetap mount statis di akhir
+# Melayani file statis dari folder /static[cite: 1]
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

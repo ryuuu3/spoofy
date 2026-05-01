@@ -1,10 +1,10 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "main.py" },
+    { "source": "/api/(.*)", "destination": "/api/main.py" },
     { "source": "/(.*)", "destination": "/static/$1" }
   ],
   "functions": {
-    "main.py": {
+    "api/main.py": {
       "runtime": "vercel-python@0.1.0"
     }
   }

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Spoofy – Music for Every Moment</title>
+  <meta name="description" content="Spoofy – Nikmati jutaan lagu, buat playlist, dan lihat lirik real-time."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing-page">
+  <nav class="lnav">
+    <div class="logo" id="logo-landing">
+      <div class="logo-icon">♫</div><span>Spoofy</span>
+    </div>
+    <ul class="lnav-links">
+      <li><a href="#">Premium</a></li><li><a href="#">Support</a></li><li><a href="#">Download</a></li>
+    </ul>
+    <div class="lnav-actions">
+      <button class="btn-ghost" id="btn-signup">Sign up</button>
+      <button class="btn-primary" id="btn-login">Log in</button>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-badge"><span class="badge-dot"></span>100 Juta+ Lagu Tersedia</div>
+      <h1 class="hero-title">Music for<br><span class="g-text">every moment</span></h1>
+      <p class="hero-desc">Dengarkan jutaan lagu tanpa iklan. Buat playlist, lihat lirik sinkron, kapan pun, di mana pun.</p>
+      <div class="hero-btns">
+        <button class="btn-primary btn-xl" id="btn-start">Mulai Gratis</button>
+        <button class="btn-outline btn-xl" id="btn-explore">Eksplor Musik</button>
+      </div>
+      <div class="hero-stats">
+        <div class="hstat"><div class="hstat-v">100M+</div><div class="hstat-l">Lagu</div></div>
+        <div class="hstat"><div class="hstat-v">5M+</div><div class="hstat-l">Podcast</div></div>
+        <div class="hstat"><div class="hstat-v">180+</div><div class="hstat-l">Negara</div></div>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-card">
+        <div class="hcard-top">
+          <div class="hcard-art">🎵</div>
+          <div class="hcard-info"><div class="hcard-title">Chill Vibes</div><div class="hcard-artist">Various Artists</div></div>
+          <div class="hcard-heart">♥</div>
+        </div>
+        <div class="wave-bars" id="hero-wave">
+          <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
+          <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
+        </div>
+        <div class="hcard-prog"><div class="hcard-prog-fill"></div></div>
+        <div class="hcard-time"><span>1:42</span><span>3:57</span></div>
+      </div>
+      <div class="fc fc1">🎸 Indie Rock</div>
+      <div class="fc fc2">🎹 Jazz & Soul</div>
+      <div class="fc fc3">🔥 Trending Now</div>
+    </div>
+  </section>
+</div>
+
+<!-- APP -->
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+      <div class="logo sidebar-logo"><div class="logo-icon">♫</div><span>Spoofy</span></div>
+      <nav class="snav">
+        <div class="snav-item active" data-view="home" id="nav-home">
+          <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg><span>Home</span>
+        </div>
+        <div class="snav-item" data-view="search" id="nav-search">
+          <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><span>Search</span>
+        </div>
+        <div class="snav-item" data-view="library" id="nav-library">
+          <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/></svg><span>Your Library</span>
+        </div>
+      </nav>
+      <div class="sdivider"></div>
+      <div class="splist-hdr">
+        <span>PLAYLIST</span>
+        <button class="icon-btn" id="btn-create-pl" title="Buat Playlist">＋</button>
+      </div>
+      <div class="splist-scroll" id="sidebar-playlists"></div>
+    </div>
+    <div class="sidebar-user" id="sidebar-user-btn">
+      <div class="s-avatar" id="s-avatar">A</div>
+      <div><div class="s-uname" id="s-uname">Pengguna</div><div class="s-plan">Free Plan</div></div>
+    </div>
+  </aside>
+
+  <main class="main-content" id="main-content"></main>
+
+  <footer class="player-bar" id="player-bar">
+    <div class="pb-left">
+      <div class="pb-art" id="pb-art"><span id="pb-art-emoji">♪</span><img id="pb-art-img" src="" alt="" style="display:none"/></div>
+      <div class="pb-info">
+        <div class="pb-track" id="pb-track">Pilih lagu untuk diputar</div>
+        <div class="pb-artist" id="pb-artist">—</div>
+      </div>
+      <button class="icon-btn like-btn" id="pb-like" title="Like">♡</button>
+      <button class="icon-btn" id="btn-lyrics" title="Lirik">≡</button>
+    </div>
+    <div class="pb-center">
+      <div class="pb-controls">
+        <button class="icon-btn ctrl" id="btn-shuffle" title="Shuffle">⇄</button>
+        <button class="icon-btn ctrl" id="btn-prev" title="Prev">⏮</button>
+        <button class="play-btn" id="btn-play" title="Play/Pause">
+          <svg id="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="pause-icon" class="hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <button class="icon-btn ctrl" id="btn-next" title="Next">⏭</button>
+        <button class="icon-btn ctrl" id="btn-repeat" title="Repeat">↺</button>
+      </div>
+      <div class="pb-progress">
+        <span class="pb-time" id="pb-cur">0:00</span>
+        <div class="progress-track" id="prog-track">
+          <div class="progress-fill" id="prog-fill"></div>
+        </div>
+        <span class="pb-time" id="pb-dur">0:00</span>
+      </div>
+    </div>
+    <div class="pb-right">
+      <button class="icon-btn" id="btn-vol-ico">🔊</button>
+      <input type="range" class="vol-slider" id="vol-slider" min="0" max="100" value="80"/>
+    </div>
+  </footer>
+</div>
+
+<!-- MODAL: Auth -->
+<div class="m-overlay hidden" id="m-auth">
+  <div class="m-box">
+    <button class="m-close" id="m-auth-close">✕</button>
+    <div class="m-logo"><div class="logo-icon big">♫</div></div>
+    <h2 id="auth-title">Masuk ke Spoofy</h2>
+    <p class="m-sub" id="auth-sub">Masukkan namamu untuk melanjutkan</p>
+    <div class="form-grp">
+      <label>Nama</label>
+      <input type="text" id="auth-name" placeholder="Nama kamu" class="f-input"/>
+    </div>
+    <button class="btn-primary btn-block" id="btn-auth-go">Masuk →</button>
+  </div>
+</div>
+
+<!-- MODAL: Create/Edit Playlist -->
+<div class="m-overlay hidden" id="m-playlist">
+  <div class="m-box">
+    <button class="m-close" id="m-pl-close">✕</button>
+    <h2 id="m-pl-title">Buat Playlist Baru</h2>
+    <div class="emoji-picker" id="emoji-picker">
+      <span class="ep selected" data-e="🎵">🎵</span><span class="ep" data-e="🎸">🎸</span>
+      <span class="ep" data-e="🎹">🎹</span><span class="ep" data-e="🎺">🎺</span>
+      <span class="ep" data-e="🥁">🥁</span><span class="ep" data-e="🎷">🎷</span>
+      <span class="ep" data-e="🔥">🔥</span><span class="ep" data-e="💜">💜</span>
+      <span class="ep" data-e="🌙">🌙</span><span class="ep" data-e="⚡">⚡</span>
+    </div>
+    <div class="form-grp">
+      <label>Nama Playlist</label>
+      <input type="text" id="pl-name" placeholder="Playlist saya #1" class="f-input"/>
+    </div>
+    <div class="form-grp">
+      <label>Deskripsi (opsional)</label>
+      <textarea id="pl-desc" placeholder="Tulis deskripsi..." class="f-input f-textarea"></textarea>
+    </div>
+    <input type="hidden" id="pl-edit-id"/>
+    <button class="btn-primary btn-block" id="btn-pl-save">Simpan</button>
+  </div>
+</div>
+
+<!-- MODAL: Add to Playlist -->
+<div class="m-overlay hidden" id="m-atp">
+  <div class="m-box m-sm">
+    <button class="m-close" id="m-atp-close">✕</button>
+    <h2>Tambah ke Playlist</h2>
+    <div id="atp-list" class="atp-list"></div>
+    <input type="hidden" id="atp-song-data"/>
+  </div>
+</div>
+
+<!-- LYRICS PANEL -->
+<div class="lyr-panel hidden" id="lyr-panel">
+  <div class="lyr-header">
+    <div>
+      <div class="lyr-title" id="lyr-title">—</div>
+      <div class="lyr-artist" id="lyr-artist">—</div>
+    </div>
+    <button class="icon-btn" id="btn-lyr-close">✕</button>
+  </div>
+  <div class="lyr-body" id="lyr-body">
+    <p class="lyr-placeholder">Putar lagu untuk melihat lirik 🎵</p>
+  </div>
+</div>
+
+<audio id="audio-player"></audio>
+
+<script src="/js/state.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/player.js"></script>
+<script src="/js/lyrics.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

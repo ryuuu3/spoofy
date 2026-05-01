@@ -1,0 +1,30 @@
+{
+  "playlists": [
+    {
+      "id": "0f45148c-8bc8-49fa-9e39-c8ae5b517682",
+      "name": "g",
+      "desc": "",
+      "emoji": "\ud83c\udfb9",
+      "songs": [
+        {
+          "trackId": "4PgOJwUCdIc",
+          "trackName": "About You",
+          "artistName": "The 1975",
+          "albumName": "Being Funny In A Foreign Language",
+          "artworkUrl100": "https://lh3.googleusercontent.com/EJyMOOnJOpAlg8FYaNZwNVrtQOXFzF12tplXLVMX-SInL_kq_AeuJoR-4KnMJBn2zjjBL-_I1tPiTWhe=w120-h120-l90-rj",
+          "trackTimeMillis": 327000
+        }
+      ]
+    }
+  ],
+  "liked": [
+    {
+      "trackId": "NFAaeGO0WFo",
+      "trackName": "Shoota (feat. Lil Uzi Vert)",
+      "artistName": "Playboi Carti",
+      "albumName": "Die Lit",
+      "artworkUrl100": "https://lh3.googleusercontent.com/yjvaQsJ0ycMEIfndcN-AXC1GW3EhVU6OocgBKmwzyECK2-DJO0-APMLusK0Cd06dIzkpDs5o_RWbV28e=w120-h120-l90-rj",
+      "trackTimeMillis": 154000
+    }
+  ]
+}

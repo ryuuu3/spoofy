@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx, json, uuid, os
 from pathlib import Path
@@ -6,8 +8,6 @@ from ytmusicapi import YTMusic
 import yt_dlp
 
 app = FastAPI(title="Spoofy API")
-
-# Middleware tetap perlu untuk akses dari frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,22 +18,23 @@ app.add_middleware(
 
 ytmusic = YTMusic()
 
-# DI VERCEL: Gunakan /tmp/ karena filesystem utama bersifat Read-Only
+# --- PERBAIKAN KRITIS UNTUK VERCEL ---
+# Di Vercel, kita hanya boleh menulis di folder /tmp/
 DATA_FILE = Path("/tmp/playlists.json")
 
-def init_data():
-    if not DATA_FILE.exists():
-        # Pastikan parent folder ada (meski di /tmp biasanya langsung bisa)
-        DATA_FILE.parent.mkdir(exist_ok=True)
-        DATA_FILE.write_text(json.dumps({"playlists": [], "liked": []}))
-
 def load_data():
-    init_data()
-    return json.loads(DATA_FILE.read_text())
+    if not DATA_FILE.exists():
+        # Inisialisasi data kosong jika file belum ada di /tmp/
+        return {"playlists": [], "liked": []}
+    try:
+        return json.loads(DATA_FILE.read_text())
+    except:
+        return {"playlists": [], "liked": []}
 
 def save_data(data):
-    init_data()
+    # Simpan ke folder /tmp/ yang diizinkan Vercel
     DATA_FILE.write_text(json.dumps(data, indent=2))
+# --------------------------------------
 
 LRCLIB_BASE = "https://lrclib.net/api"
 
@@ -95,7 +96,7 @@ async def get_stream(video_id: str):
         'noplaylist': True,
         'quiet': True,
         'extract_flat': False,
-        'socket_timeout': 10 # Supaya tidak gantung kelamaan di Vercel
+        'cachedir': '/tmp/yt-dlp-cache' # Pastikan cache juga ke /tmp/
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -104,16 +105,15 @@ async def get_stream(video_id: str):
             if url:
                 return {"url": url}
     except Exception as e:
-        print(f"Stream error: {e}")
+        print(f"Error streaming: {e}")
     raise HTTPException(404, "Stream not found")
 
 @app.get("/api/lyrics")
 async def get_lyrics(artist: str, track: str, album: str = ""):
-    headers = {"User-Agent": "Spoofy/1.0 (https://github.com/spoofy)"}
+    headers = {"User-Agent": "Spoofy/1.0"}
     async with httpx.AsyncClient() as client:
         params = {"artist_name": artist, "track_name": track}
-        if album:
-            params["album_name"] = album
+        if album: params["album_name"] = album
         r = await client.get(f"{LRCLIB_BASE}/get", params=params, headers=headers)
         if r.status_code == 404:
             r2 = await client.get(f"{LRCLIB_BASE}/search", params={"q": f"{artist} {track}"}, headers=headers)
@@ -122,7 +122,7 @@ async def get_lyrics(artist: str, track: str, album: str = ""):
             raise HTTPException(404, "Lyrics not found")
         return r.json()
 
-# -- Playlists API --
+# --- Playlists & Liked (Menggunakan fungsi load/save baru) ---
 @app.get("/api/playlists")
 def list_playlists():
     return load_data()["playlists"]
@@ -137,23 +137,18 @@ async def create_playlist(req: Request):
     save_data(data)
     return pl
 
-@app.delete("/api/playlists/{pid}")
-def delete_playlist(pid: str):
-    data = load_data()
-    data["playlists"] = [p for p in data["playlists"] if p["id"] != pid]
-    save_data(data)
-    return {"ok": True}
+@app.get("/api/liked")
+def get_liked():
+    return load_data()["liked"]
 
-@app.post("/api/playlists/{pid}/songs")
-async def add_song(pid: str, req: Request):
+@app.post("/api/liked")
+async def like_song(req: Request):
     song = await req.json()
     data = load_data()
-    for pl in data["playlists"]:
-        if pl["id"] == pid:
-            if not any(s["trackId"] == song["trackId"] for s in pl["songs"]):
-                pl["songs"].append(song)
-            save_data(data)
-            return pl
-    raise HTTPException(404, "Playlist not found")
+    if not any(s["trackId"] == song["trackId"] for s in data["liked"]):
+        data["liked"].append(song)
+        save_data(data)
+    return data["liked"]
 
-# HAPUS app.mount static di sini, kita handle via vercel.json
+# Tetap mount statis di akhir
+app.mount("/", StaticFiles(directory="static", html=True), name="static")

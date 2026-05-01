@@ -2,10 +2,5 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/main.py" },
     { "source": "/(.*)", "destination": "/static/$1" }
-  ],
-  "functions": {
-    "api/main.py": {
-      "runtime": "python@3.9"
-    }
-  }
+  ]
 }

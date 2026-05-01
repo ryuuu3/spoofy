@@ -1,6 +1,5 @@
 fastapi
-uvicorn[standard]
+uvicorn
 httpx
 ytmusicapi
-yt-dlp
-python-dotenv
+yt-dlp>=2024.03.10

@@ -1,133 +1,100 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import httpx, json, uuid, os
+import httpx, json, uuid, logging
 from pathlib import Path
 from ytmusicapi import YTMusic
 
-app = FastAPI(title="Spoofy API")
+# Matikan logger internal yang sering bikin "Device Busy" di Vercel
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 ytmusic = YTMusic()
-DATA_FILE = Path("/tmp/playlists.json")
-
-def load_data():
-    # Gunakan try-except yang lebih aman untuk menghindari resource busy saat baca file
-    try:
-        if DATA_FILE.exists():
-            with open(DATA_FILE, 'r') as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {"playlists": [], "liked": []}
-
-def save_data(data):
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(data, f)
-    except Exception:
-        pass # Vercel /tmp/ kadang fluktuatif
+# Gunakan memori saja untuk storage jika /tmp/ bermasalah
+STORAGE = {"playlists": [], "liked": []}
 
 @app.get("/api/stream/{video_id}")
 async def get_stream(video_id: str):
+    # Gunakan instance kencang yang jarang overload
     url_yt = f"https://www.youtube.com/watch?v={video_id}"
+    instance = "https://cobalt.api.ghst.xyz/"
     
-    # Gunakan instance co.wuk.sh (sangat stabil untuk Vercel)
-    instance_url = "https://co.wuk.sh/"
-    
-    # Gunakan limits untuk memastikan koneksi tidak menggantung
-    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
-    
-    async with httpx.AsyncClient(timeout=15.0, limits=limits) as client:
+    # Force close connection setelah selesai
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         try:
-            response = await client.post(
-                instance_url,
-                json={
-                    "url": url_yt,
-                    "downloadMode": "audio",
-                    "audioFormat": "mp3"
-                },
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json"
-                }
+            resp = await client.post(
+                instance,
+                json={"url": url_yt, "downloadMode": "audio", "audioFormat": "mp3"},
+                headers={"Accept": "application/json"}
             )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("url"):
-                    return {"url": data.get("url")}
-                
-            print(f"Cobalt Status: {response.status_code}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if "url" in data:
+                    return {"url": data["url"]}
         except Exception as e:
-            # Log error tanpa bibliografi
-            print(f"Stream Error Detail: {str(e)}")
-    
-    raise HTTPException(status_code=404, detail="Gagal mengambil stream.")
+            print(f"S: {str(e)}")
+            
+    raise HTTPException(status_code=404, detail="Busy")
 
-# --- FITUR LAIN TETAP SAMA ---
 @app.get("/api/search")
 async def search(q: str):
-    results = ytmusic.search(q, filter="songs", limit=20)
+    search_results = ytmusic.search(q, filter="songs", limit=15)
     formatted = []
-    for r in results:
-        artist_name = r['artists'][0]['name'] if r.get('artists') else "Unknown"
-        art_url = r['thumbnails'][-1]['url'] if r.get('thumbnails') else ""
+    for r in search_results:
         formatted.append({
-            "trackId": r['videoId'], "trackName": r['title'],
-            "artistName": artist_name, "albumName": r.get('album', {}).get('name', ""),
-            "artworkUrl100": art_url, "trackTimeMillis": 0
+            "trackId": r['videoId'],
+            "trackName": r['title'],
+            "artistName": r['artists'][0]['name'] if r.get('artists') else "Unknown",
+            "artworkUrl100": r['thumbnails'][-1]['url'] if r.get('thumbnails') else ""
         })
     return {"results": formatted}
 
 @app.get("/api/trending")
 async def trending():
     charts = ytmusic.get_charts(country='ID')
-    songs = charts.get('trending', {}).get('items', []) or charts.get('tracks', {}).get('items', [])
+    songs = charts.get('trending', {}).get('items', [])[:20]
     formatted = []
-    for r in songs[:20]:
-        artist_name = r['artists'][0]['name'] if r.get('artists') else "Unknown"
-        art_url = r['thumbnails'][-1]['url'] if r.get('thumbnails') else ""
+    for r in songs:
         formatted.append({
-            "trackId": r['videoId'], "trackName": r['title'],
-            "artistName": artist_name, "artworkUrl100": art_url
+            "trackId": r['videoId'],
+            "trackName": r['title'],
+            "artistName": r['artists'][0]['name'] if r.get('artists') else "Unknown",
+            "artworkUrl100": r['thumbnails'][-1]['url'] if r.get('thumbnails') else ""
         })
     return {"results": formatted}
 
 @app.get("/api/lyrics")
 async def get_lyrics(artist: str, track: str):
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         r = await client.get(f"https://lrclib.net/api/get?artist_name={artist}&track_name={track}")
-        if r.status_code == 200: return r.json()
-        return {"error": "Lyrics not found"}
+        return r.json() if r.status_code == 200 else {"error": "None"}
 
 @app.get("/api/playlists")
-def list_playlists(): return load_data()["playlists"]
+def list_pl(): return STORAGE["playlists"]
 
 @app.post("/api/playlists")
-async def create_playlist(req: Request):
-    body, data = await req.json(), load_data()
-    pl = {"id": str(uuid.uuid4()), "name": body.get("name","New Playlist"), "songs": []}
-    data["playlists"].append(pl)
-    save_data(data)
+async def create_pl(req: Request):
+    body = await req.json()
+    pl = {"id": str(uuid.uuid4()), "name": body.get("name", "New"), "songs": []}
+    STORAGE["playlists"].append(pl)
     return pl
 
 @app.get("/api/liked")
-def get_liked(): return load_data()["liked"]
+def get_liked(): return STORAGE["liked"]
 
 @app.post("/api/liked")
-async def like_song(req: Request):
-    song, data = await req.json(), load_data()
-    if not any(s["trackId"] == song["trackId"] for s in data["liked"]):
-        data["liked"].append(song)
-        save_data(data)
-    return data["liked"]
+async def like(req: Request):
+    song = await req.json()
+    if not any(s["trackId"] == song["trackId"] for s in STORAGE["liked"]):
+        STORAGE["liked"].append(song)
+    return STORAGE["liked"]
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

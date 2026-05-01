@@ -1,14 +1,13 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-import httpx, json, uuid, os
+import httpx, json, uuid
 from pathlib import Path
 from ytmusicapi import YTMusic
 
 app = FastAPI(title="Spoofy API")
 
-# Middleware CORS agar frontend bisa berkomunikasi dengan API
+# Setup CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,9 +17,6 @@ app.add_middleware(
 )
 
 ytmusic = YTMusic()
-
-# --- KONFIGURASI PENYIMPANAN VERCEL (READ-ONLY FIX) ---
-# Folder /tmp/ adalah satu-satunya tempat yang bisa ditulisi di Vercel
 DATA_FILE = Path("/tmp/playlists.json")
 
 def load_data():
@@ -34,23 +30,17 @@ def load_data():
 def save_data(data):
     DATA_FILE.write_text(json.dumps(data, indent=2))
 
-# --- BYPASS STREAMING (COBALT API v10) ---
 @app.get("/api/stream/{video_id}")
 async def get_stream(video_id: str):
-    """
-    Menggunakan instance alternatif Cobalt untuk bypass auth JWT 
-    dan memperbaiki typo name 'cite'.
-    """
     url_yt = f"https://www.youtube.com/watch?v={video_id}"
     
-    # Daftar instance alternatif jika satu gagal
-    # 1. https://cobalt.api.ghst.xyz/
-    # 2. https://co.wuk.sh/
+    # Menggunakan instance alternatif (ghst) yang tidak butuh JWT/API Key
+    instance_url = "https://cobalt.api.ghst.xyz/"
     
     async with httpx.AsyncClient(timeout=25.0) as client:
         try:
             response = await client.post(
-                "https://cobalt.api.ghst.xyz/", 
+                instance_url,
                 json={
                     "url": url_yt,
                     "downloadMode": "audio",
@@ -66,15 +56,13 @@ async def get_stream(video_id: str):
                 data = response.json()
                 if data.get("url"):
                     return {"url": data.get("url")}
-                
-            # Print bersih tanpa typo 'cite'
-            print(f"Cobalt Log: {response.status_code} - {response.text}")
+            
+            print(f"Cobalt Status: {response.status_code}")
         except Exception as e:
-            print(f"Streaming Error: {e}")
+            print(f"Stream Error: {str(e)}")
     
-    raise HTTPException(status_code=404, detail="Gagal mengambil stream audio.") audio.")
+    raise HTTPException(status_code=404, detail="Gagal mengambil audio.")
 
-# --- FITUR PENCARIAN & TRENDING ---
 @app.get("/api/search")
 async def search(q: str):
     results = ytmusic.search(q, filter="songs", limit=20)
@@ -108,11 +96,9 @@ async def trending():
         })
     return {"results": formatted}
 
-# --- LIRIK & DATA USER ---
 @app.get("/api/lyrics")
 async def get_lyrics(artist: str, track: str):
     async with httpx.AsyncClient() as client:
-        # Mengambil lirik gratis dari lrclib[cite: 1]
         r = await client.get(f"https://lrclib.net/api/get?artist_name={artist}&track_name={track}")
         if r.status_code == 200:
             return r.json()
@@ -142,5 +128,6 @@ async def like_song(req: Request):
         save_data(data)
     return data["liked"]
 
-# Mount folder static untuk melayani file HTML/JS[cite: 1]
+# Melayani file statis
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

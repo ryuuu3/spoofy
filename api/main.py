@@ -1,13 +1,12 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import httpx, json, uuid
+import httpx, json, uuid, os
 from pathlib import Path
 from ytmusicapi import YTMusic
 
 app = FastAPI(title="Spoofy API")
 
-# Setup CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,26 +19,34 @@ ytmusic = YTMusic()
 DATA_FILE = Path("/tmp/playlists.json")
 
 def load_data():
-    if not DATA_FILE.exists():
-        return {"playlists": [], "liked": []}
+    # Gunakan try-except yang lebih aman untuk menghindari resource busy saat baca file
     try:
-        return json.loads(DATA_FILE.read_text())
-    except:
-        return {"playlists": [], "liked": []}
+        if DATA_FILE.exists():
+            with open(DATA_FILE, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {"playlists": [], "liked": []}
 
 def save_data(data):
-    DATA_FILE.write_text(json.dumps(data, indent=2))
+    try:
+        with open(DATA_FILE, 'w') as f:
+            json.dump(data, f)
+    except Exception:
+        pass # Vercel /tmp/ kadang fluktuatif
 
 @app.get("/api/stream/{video_id}")
 async def get_stream(video_id: str):
     url_yt = f"https://www.youtube.com/watch?v={video_id}"
     
-    # Kita coba gunakan instance co.wuk.sh yang sangat stabil
+    # Gunakan instance co.wuk.sh (sangat stabil untuk Vercel)
     instance_url = "https://co.wuk.sh/"
     
-    # Gunakan 'with' agar client otomatis tertutup setelah selesai (mencegah Resource Busy)
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+    # Gunakan limits untuk memastikan koneksi tidak menggantung
+    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+    
+    async with httpx.AsyncClient(timeout=15.0, limits=limits) as client:
+        try:
             response = await client.post(
                 instance_url,
                 json={
@@ -55,17 +62,17 @@ async def get_stream(video_id: str):
             
             if response.status_code == 200:
                 data = response.json()
-                # Kadang Cobalt v10 mengembalikan link di field 'url'
-                stream_url = data.get("url")
-                if stream_url:
-                    return {"url": stream_url}
-            
+                if data.get("url"):
+                    return {"url": data.get("url")}
+                
             print(f"Cobalt Status: {response.status_code}")
-    except Exception as e:
-        print(f"Stream Exception: {str(e)}")
+        except Exception as e:
+            # Log error tanpa bibliografi
+            print(f"Stream Error Detail: {str(e)}")
     
-    raise HTTPException(status_code=404, detail="Gagal mengambil audio.")
+    raise HTTPException(status_code=404, detail="Gagal mengambil stream.")
 
+# --- FITUR LAIN TETAP SAMA ---
 @app.get("/api/search")
 async def search(q: str):
     results = ytmusic.search(q, filter="songs", limit=20)
@@ -74,12 +81,9 @@ async def search(q: str):
         artist_name = r['artists'][0]['name'] if r.get('artists') else "Unknown"
         art_url = r['thumbnails'][-1]['url'] if r.get('thumbnails') else ""
         formatted.append({
-            "trackId": r['videoId'],
-            "trackName": r['title'],
-            "artistName": artist_name,
-            "albumName": r.get('album', {}).get('name', ""),
-            "artworkUrl100": art_url,
-            "trackTimeMillis": 0
+            "trackId": r['videoId'], "trackName": r['title'],
+            "artistName": artist_name, "albumName": r.get('album', {}).get('name', ""),
+            "artworkUrl100": art_url, "trackTimeMillis": 0
         })
     return {"results": formatted}
 
@@ -92,10 +96,8 @@ async def trending():
         artist_name = r['artists'][0]['name'] if r.get('artists') else "Unknown"
         art_url = r['thumbnails'][-1]['url'] if r.get('thumbnails') else ""
         formatted.append({
-            "trackId": r['videoId'],
-            "trackName": r['title'],
-            "artistName": artist_name,
-            "artworkUrl100": art_url
+            "trackId": r['videoId'], "trackName": r['title'],
+            "artistName": artist_name, "artworkUrl100": art_url
         })
     return {"results": formatted}
 
@@ -103,13 +105,11 @@ async def trending():
 async def get_lyrics(artist: str, track: str):
     async with httpx.AsyncClient() as client:
         r = await client.get(f"https://lrclib.net/api/get?artist_name={artist}&track_name={track}")
-        if r.status_code == 200:
-            return r.json()
+        if r.status_code == 200: return r.json()
         return {"error": "Lyrics not found"}
 
 @app.get("/api/playlists")
-def list_playlists(): 
-    return load_data()["playlists"]
+def list_playlists(): return load_data()["playlists"]
 
 @app.post("/api/playlists")
 async def create_playlist(req: Request):
@@ -120,8 +120,7 @@ async def create_playlist(req: Request):
     return pl
 
 @app.get("/api/liked")
-def get_liked(): 
-    return load_data()["liked"]
+def get_liked(): return load_data()["liked"]
 
 @app.post("/api/liked")
 async def like_song(req: Request):
@@ -131,6 +130,4 @@ async def like_song(req: Request):
         save_data(data)
     return data["liked"]
 
-# Melayani file statis
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

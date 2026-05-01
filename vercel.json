@@ -1,6 +1,7 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "main.py" }
+    { "source": "/api/(.*)", "destination": "main.py" },
+    { "source": "/(.*)", "destination": "/static/$1" }
   ],
   "functions": {
     "main.py": {

@@ -38,22 +38,23 @@ def save_data(data):
 @app.get("/api/stream/{video_id}")
 async def get_stream(video_id: str):
     """
-    Mengambil URL stream audio menggunakan Cobalt API terbaru.
-    Ini solusi terbaik karena IP Vercel sering diblokir oleh YouTube.
+    Menggunakan instance alternatif Cobalt untuk bypass auth JWT 
+    dan memperbaiki typo name 'cite'.
     """
     url_yt = f"https://www.youtube.com/watch?v={video_id}"
     
+    # Daftar instance alternatif jika satu gagal
+    # 1. https://cobalt.api.ghst.xyz/
+    # 2. https://co.wuk.sh/
+    
     async with httpx.AsyncClient(timeout=25.0) as client:
         try:
-            # Request ke endpoint Cobalt v10 terbaru
             response = await client.post(
-                "https://api.cobalt.tools/", 
+                "https://cobalt.api.ghst.xyz/", 
                 json={
                     "url": url_yt,
-                    "videoQuality": "720",
                     "downloadMode": "audio",
-                    "audioFormat": "mp3",
-                    "filenamePattern": "basic"
+                    "audioFormat": "mp3"
                 },
                 headers={
                     "Accept": "application/json",
@@ -63,15 +64,15 @@ async def get_stream(video_id: str):
             
             if response.status_code == 200:
                 data = response.json()
-                # Cobalt v10 mengembalikan status 'stream', 'url', atau 'redirect'[cite: 1]
-                if data.get("status") in ["stream", "url", "redirect"]:
+                if data.get("url"):
                     return {"url": data.get("url")}
                 
-            print(f"Cobalt Error: {response.status_code} - {response.text}")[cite: 1]
+            # Print bersih tanpa typo 'cite'
+            print(f"Cobalt Log: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"Streaming Exception: {e}")
+            print(f"Streaming Error: {e}")
     
-    raise HTTPException(status_code=404, detail="Gagal mengambil stream audio.")
+    raise HTTPException(status_code=404, detail="Gagal mengambil stream audio.") audio.")
 
 # --- FITUR PENCARIAN & TRENDING ---
 @app.get("/api/search")

@@ -1,6 +1,4 @@
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx, json, uuid, os
 from pathlib import Path
@@ -8,6 +6,8 @@ from ytmusicapi import YTMusic
 import yt_dlp
 
 app = FastAPI(title="Spoofy API")
+
+# Middleware tetap perlu untuk akses dari frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,15 +18,21 @@ app.add_middleware(
 
 ytmusic = YTMusic()
 
-DATA_FILE = Path("data/playlists.json")
-DATA_FILE.parent.mkdir(exist_ok=True)
-if not DATA_FILE.exists():
-    DATA_FILE.write_text(json.dumps({"playlists": [], "liked": []}))
+# DI VERCEL: Gunakan /tmp/ karena filesystem utama bersifat Read-Only
+DATA_FILE = Path("/tmp/playlists.json")
+
+def init_data():
+    if not DATA_FILE.exists():
+        # Pastikan parent folder ada (meski di /tmp biasanya langsung bisa)
+        DATA_FILE.parent.mkdir(exist_ok=True)
+        DATA_FILE.write_text(json.dumps({"playlists": [], "liked": []}))
 
 def load_data():
+    init_data()
     return json.loads(DATA_FILE.read_text())
 
 def save_data(data):
+    init_data()
     DATA_FILE.write_text(json.dumps(data, indent=2))
 
 LRCLIB_BASE = "https://lrclib.net/api"
@@ -61,7 +67,6 @@ async def search(q: str):
 
 @app.get("/api/trending")
 async def trending():
-    # Explore charts
     charts = ytmusic.get_charts(country='ID')
     formatted = []
     songs = charts.get('trending', {}).get('items', [])
@@ -72,7 +77,7 @@ async def trending():
         artist_name = r['artists'][0]['name'] if r.get('artists') else "Unknown"
         album_name = r['album']['name'] if r.get('album') else ""
         art_url = r['thumbnails'][-1]['url'] if r.get('thumbnails') else ""
-        dur = 0 # Not always provided in charts
+        dur = 0 
         formatted.append({
             "trackId": r['videoId'],
             "trackName": r['title'],
@@ -89,7 +94,8 @@ async def get_stream(video_id: str):
         'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
-        'extract_flat': False
+        'extract_flat': False,
+        'socket_timeout': 10 # Supaya tidak gantung kelamaan di Vercel
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -98,7 +104,7 @@ async def get_stream(video_id: str):
             if url:
                 return {"url": url}
     except Exception as e:
-        print(e)
+        print(f"Stream error: {e}")
     raise HTTPException(404, "Stream not found")
 
 @app.get("/api/lyrics")
@@ -110,16 +116,13 @@ async def get_lyrics(artist: str, track: str, album: str = ""):
             params["album_name"] = album
         r = await client.get(f"{LRCLIB_BASE}/get", params=params, headers=headers)
         if r.status_code == 404:
-            # fallback
             r2 = await client.get(f"{LRCLIB_BASE}/search", params={"q": f"{artist} {track}"}, headers=headers)
             if r2.status_code == 200 and r2.json():
                 return r2.json()[0]
             raise HTTPException(404, "Lyrics not found")
-        if r.status_code != 200:
-            raise HTTPException(r.status_code, "Lyrics service error")
-    return r.json()
+        return r.json()
 
-# ── Playlists ─────────────────────────────────────
+# -- Playlists API --
 @app.get("/api/playlists")
 def list_playlists():
     return load_data()["playlists"]
@@ -133,17 +136,6 @@ async def create_playlist(req: Request):
     data["playlists"].append(pl)
     save_data(data)
     return pl
-
-@app.put("/api/playlists/{pid}")
-async def update_playlist(pid: str, req: Request):
-    body = await req.json()
-    data = load_data()
-    for pl in data["playlists"]:
-        if pl["id"] == pid:
-            pl.update({k: v for k, v in body.items() if k != "id"})
-            save_data(data)
-            return pl
-    raise HTTPException(404, "Playlist not found")
 
 @app.delete("/api/playlists/{pid}")
 def delete_playlist(pid: str):
@@ -164,36 +156,4 @@ async def add_song(pid: str, req: Request):
             return pl
     raise HTTPException(404, "Playlist not found")
 
-@app.delete("/api/playlists/{pid}/songs/{track_id}")
-def remove_song(pid: str, track_id: str):
-    data = load_data()
-    for pl in data["playlists"]:
-        if pl["id"] == pid:
-            pl["songs"] = [s for s in pl["songs"] if str(s["trackId"]) != track_id]
-            save_data(data)
-            return pl
-    raise HTTPException(404, "Playlist not found")
-
-# ── Liked Songs ───────────────────────────────────
-@app.get("/api/liked")
-def get_liked():
-    return load_data()["liked"]
-
-@app.post("/api/liked")
-async def like_song(req: Request):
-    song = await req.json()
-    data = load_data()
-    if not any(s["trackId"] == song["trackId"] for s in data["liked"]):
-        data["liked"].append(song)
-    save_data(data)
-    return data["liked"]
-
-@app.delete("/api/liked/{track_id}")
-def unlike_song(track_id: str):
-    data = load_data()
-    data["liked"] = [s for s in data["liked"] if str(s["trackId"]) != track_id]
-    save_data(data)
-    return data["liked"]
-
-# ── Static files ──────────────────────────────────
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# HAPUS app.mount static di sini, kita handle via vercel.json

@@ -34,11 +34,12 @@ def save_data(data):
 async def get_stream(video_id: str):
     url_yt = f"https://www.youtube.com/watch?v={video_id}"
     
-    # Menggunakan instance alternatif (ghst) yang tidak butuh JWT/API Key
-    instance_url = "https://cobalt.api.ghst.xyz/"
+    # Kita coba gunakan instance co.wuk.sh yang sangat stabil
+    instance_url = "https://co.wuk.sh/"
     
-    async with httpx.AsyncClient(timeout=25.0) as client:
-        try:
+    # Gunakan 'with' agar client otomatis tertutup setelah selesai (mencegah Resource Busy)
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(
                 instance_url,
                 json={
@@ -54,12 +55,14 @@ async def get_stream(video_id: str):
             
             if response.status_code == 200:
                 data = response.json()
-                if data.get("url"):
-                    return {"url": data.get("url")}
+                # Kadang Cobalt v10 mengembalikan link di field 'url'
+                stream_url = data.get("url")
+                if stream_url:
+                    return {"url": stream_url}
             
             print(f"Cobalt Status: {response.status_code}")
-        except Exception as e:
-            print(f"Stream Error: {str(e)}")
+    except Exception as e:
+        print(f"Stream Exception: {str(e)}")
     
     raise HTTPException(status_code=404, detail="Gagal mengambil audio.")
 

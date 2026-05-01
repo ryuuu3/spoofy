@@ -8,7 +8,7 @@ from ytmusicapi import YTMusic
 
 app = FastAPI(title="Spoofy API")
 
-# Middleware CORS
+# Middleware CORS agar frontend bisa berkomunikasi dengan API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,8 +19,8 @@ app.add_middleware(
 
 ytmusic = YTMusic()
 
-# --- KONFIGURASI PENYIMPANAN VERCEL ---
-# Menggunakan /tmp/ karena sistem file Vercel bersifat read-only
+# --- KONFIGURASI PENYIMPANAN VERCEL (READ-ONLY FIX) ---
+# Folder /tmp/ adalah satu-satunya tempat yang bisa ditulisi di Vercel
 DATA_FILE = Path("/tmp/playlists.json")
 
 def load_data():
@@ -34,25 +34,26 @@ def load_data():
 def save_data(data):
     DATA_FILE.write_text(json.dumps(data, indent=2))
 
-# --- BYPASS STREAMING (COBALT API) ---
+# --- BYPASS STREAMING (COBALT API v10) ---
 @app.get("/api/stream/{video_id}")
 async def get_stream(video_id: str):
     """
-    Mengambil URL stream audio menggunakan Cobalt API untuk menghindari 
-    deteksi bot YouTube yang memblokir IP server Vercel.
+    Mengambil URL stream audio menggunakan Cobalt API terbaru.
+    Ini solusi terbaik karena IP Vercel sering diblokir oleh YouTube.
     """
     url_yt = f"https://www.youtube.com/watch?v={video_id}"
     
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=25.0) as client:
         try:
-            # Menggunakan instance publik Cobalt yang stabil
+            # Request ke endpoint Cobalt v10 terbaru
             response = await client.post(
-                "https://api.cobalt.tools/api/json",
+                "https://api.cobalt.tools/", 
                 json={
                     "url": url_yt,
+                    "videoQuality": "720",
                     "downloadMode": "audio",
                     "audioFormat": "mp3",
-                    "isNoTTWatermark": True
+                    "filenamePattern": "basic"
                 },
                 headers={
                     "Accept": "application/json",
@@ -62,14 +63,15 @@ async def get_stream(video_id: str):
             
             if response.status_code == 200:
                 data = response.json()
-                if data.get("url"):
-                    return {"url": data["url"]}
+                # Cobalt v10 mengembalikan status 'stream', 'url', atau 'redirect'[cite: 1]
+                if data.get("status") in ["stream", "url", "redirect"]:
+                    return {"url": data.get("url")}
                 
-            print(f"Cobalt Error: {response.text}")
+            print(f"Cobalt Error: {response.status_code} - {response.text}")[cite: 1]
         except Exception as e:
             print(f"Streaming Exception: {e}")
     
-    raise HTTPException(status_code=404, detail="Audio stream blocked by YouTube.")
+    raise HTTPException(status_code=404, detail="Gagal mengambil stream audio.")
 
 # --- FITUR PENCARIAN & TRENDING ---
 @app.get("/api/search")
@@ -109,6 +111,7 @@ async def trending():
 @app.get("/api/lyrics")
 async def get_lyrics(artist: str, track: str):
     async with httpx.AsyncClient() as client:
+        # Mengambil lirik gratis dari lrclib[cite: 1]
         r = await client.get(f"https://lrclib.net/api/get?artist_name={artist}&track_name={track}")
         if r.status_code == 200:
             return r.json()
@@ -120,8 +123,7 @@ def list_playlists():
 
 @app.post("/api/playlists")
 async def create_playlist(req: Request):
-    body = await req.json()
-    data = load_data()
+    body, data = await req.json(), load_data()
     pl = {"id": str(uuid.uuid4()), "name": body.get("name","New Playlist"), "songs": []}
     data["playlists"].append(pl)
     save_data(data)
@@ -133,12 +135,11 @@ def get_liked():
 
 @app.post("/api/liked")
 async def like_song(req: Request):
-    song = await req.json()
-    data = load_data()
+    song, data = await req.json(), load_data()
     if not any(s["trackId"] == song["trackId"] for s in data["liked"]):
         data["liked"].append(song)
         save_data(data)
     return data["liked"]
 
-# Melayani file statis
+# Mount folder static untuk melayani file HTML/JS[cite: 1]
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
